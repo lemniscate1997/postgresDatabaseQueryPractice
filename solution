@@ -1,0 +1,65 @@
+﻿----------1-----------
+select emp_type, count(emp_id) No_of_employee from employee group by(emp_type);
+
+----------2-----------
+select emp_name, sum(CASE WHEN att_status = 'P' THEN 1 ELSE 0 END) total_present_days, sum(CASE WHEN att_status = 'A' THEN 1 ELSE 0 END) total_absent_days 
+	from employee natural join attendance group by emp_id ;
+
+----------3-----------
+select emp_name, sum(CASE WHEN att_status = 'A' THEN 1 ELSE 0 END) absent_days_count, (case when sum(CASE WHEN att_status = 'A' THEN 1 ELSE 0 END)<4 then 'green' else 'red' end) status_flag 
+	from employee natural join (select * from attendance where months_between(att_date, now()::date)<=15) salary 
+	group by emp_id;
+
+----------4-----------
+select emp_name, emp_type, sum(sal_paid_amount) total_paid_salary, sum(sal_net_amount - sal_paid_amount) yearly_deduction 
+	from employee natural join (select * from salary where months_between(sal_date, now()::date)<12) salary 
+	group by emp_id, emp_type;
+
+----------5-----------
+select * from (select emp_name, sum(sal_paid_amount) amount from employee natural join (select * from salary where months_between(sal_date, now()::date)<12) salary group by emp_id) salary 
+	order by amount desc offset 1 rows fetch next 1 rows only;
+
+----------6----------
+select emp_name from 
+	employee 
+		natural join
+	(select emp_id from attendance group by emp_id having sum(case when att_status='A' and months_between(att_date, now()::date)<1 then 1 else 0 end)=0) attendance
+		natural join
+	(select emp_id from review where review_rating=8 and months_between(review_date, now()::date)<1) review;
+
+----------7-----------
+select emp_name, sal_paid_amount 
+	from employee natural join (select * from salary where months_between(sal_date, now()::date)<1) salary 
+	where not(sal_paid_amount between 10000 and 30000) and not(sal_paid_amount between 40000 and 75000);
+
+----------8-----------
+select emp_name, abs(sal1-sal2) salary_diff_in_last_two_month from 
+	employee natural join 
+	(select emp_id, sal_net_amount as sal1 from salary where months_between(sal_date, now()::date)<2 and months_between(sal_date, now()::date)>0) s1 
+	natural join (select emp_id, sal_net_amount as sal2 from salary where months_between(sal_date, now()::date)<1) s2;
+
+----------9-----------
+select count(*) male_employee from employee where emp_gender=1;
+
+---------10-----------
+CREATE OR REPLACE FUNCTION attendance_report (month character, year character)
+returns table(emp_name character, total_present_days bigint, total_absent_days bigint) as $$
+	select emp_name, sum(CASE WHEN att_status = 'P' THEN 1 ELSE 0 END) total_present_days, sum(CASE WHEN att_status = 'A' THEN 1 ELSE 0 END) total_absent_days from employee natural join (select * from 
+		attendance where to_char(att_date, 'yyyy')=year and to_char(att_date, 'mm')=right(concat('0',month),2)) attendance group by emp_id
+$$
+language 'sql';
+
+select * from attendance_report('01','2019');
+
+----------12----------
+select emp_name from employee natural join workson group by emp_id having sum(project_id)=(select count(*) total from project);
+
+----------13----------
+select emp_name from employee natural join workson group by emp_id having sum(project_id)=0;
+
+----------14----------
+select emp_id, sal_paid_amount from employee natural join salary group by emp_id, sal_paid_amount 
+	having sum(case when months_between(sal_date, now()::date)=0 then sal_paid_amount else 0 end) 
+		> 
+		(select avg(sal_paid_amount) from salary where months_between(sal_date, now()::date)=0)
+	order by sal_paid_amount;
